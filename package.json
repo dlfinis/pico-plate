@@ -4,8 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "start": "node index",
     "test": "jest",
-    "test:watch": "jest --matchAll"
+    "test:watch": "jest --watchAll"
   },
   "keywords": [],
   "author": "",
