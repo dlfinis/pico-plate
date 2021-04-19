@@ -1,5 +1,5 @@
 /**
- * Pico & Placa.
+ * Pico & Plate.
  * Vehicle control program for restrictions of Quito city.
  * Control without consideration of additional restrictions.
  */
