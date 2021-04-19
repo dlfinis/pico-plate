@@ -1,10 +1,11 @@
 /**
  * Pico & Placa.
- * Vehicle control program.
+ * Vehicle control program for restrictions of Quito city.
  * Control without consideration of additional restrictions.
  */
 'use strict';
 const inputData = require('./inputData');
+const constants = require('./constants');
 
 function isValidValue(typeData, value) {
     // console.log('isValidValue', typeData, value);
@@ -39,7 +40,7 @@ function isWeekend(dateProcess) {
     if (!isValidValue(Date, dateProcess)) {
         throw new Error('Error to check is weekend day', dateProcess);
     }
-    const day = dateProcess.getDay();
+    const day = dateProcess.getUTCDay();
     if (day && day == 6 || day == 0) {
         return true;
     } else {
@@ -47,6 +48,17 @@ function isWeekend(dateProcess) {
     }
 }
 
+function isPlateException(plate) {
+    if (isValidValue(String, plate)) {
+        const letters = plate.substring(0, plate.indexOf('-')+1).split();
+        if (letters.length == 1) {
+            return 'Not lock, diplomatic.'
+        }
+        if (['A', 'U', 'Z'].includes(letters[1])){
+            return 'Not lock, public transportation.'
+        }
+    }
+}
 function isPlateNumberNotBlock(dateProcess, plate) {
     const controlRestriction = new Map([
         [1, [1, 2]],
@@ -58,7 +70,7 @@ function isPlateNumberNotBlock(dateProcess, plate) {
     if (isValidValue(Date, dateProcess) && isValidValue(String, plate)) {
         const stringLength = plate.length;
         const lastDigit = Number.parseInt(plate.charAt(stringLength - 1));
-        const day = dateProcess.getDay();
+        const day = dateProcess.getUTCDay() || dateProcess.getDay();
 
         const dayControl = controlRestriction.get(day) || [];
         const existBlock = dayControl.some(item => item == lastDigit);
@@ -81,49 +93,66 @@ function isNotInTheTimeRangeBlock(dateProcess) {
     let dateMin = new Date();
     let dateMax = new Date();
     if (dateProcess.getUTCHours() >= 13) {
-        dateMin = getDateWithTimeRange(dateProcess, '17:00');
-        dateMax = getDateWithTimeRange(dateProcess, '19:00');
+        dateMin = getDateWithTimeRange(dateProcess, constants.CONFIG.AFTERNOON_MIN);
+        dateMax = getDateWithTimeRange(dateProcess, constants.CONFIG.AFTERNOON_MAX);
     } else {
-        dateMin = getDateWithTimeRange(dateProcess, '06:30');
-        dateMax = getDateWithTimeRange(dateProcess, '10:00');
+        dateMin = getDateWithTimeRange(dateProcess, constants.CONFIG.MORNING_MIN);
+        dateMax = getDateWithTimeRange(dateProcess, constants.CONFIG.MORNING_MAX);
     }
 
-    console.log('isNotInTheTimeRangeBlock', 'origin', dateProcess, 'dateMin', dateMin, 'dateMax', dateMax);
-    if (dateMin.getTime() >= dateProcess.getTime() || dateProcess.getTime() <= dateMax.getTime()) {
+    console.log('isNotInTheTimeRangeBlock', 'origin', dateProcess, 'dateMin', dateMin, 'dateMax', dateMax,
+        'result:', dateProcess.getTime() >= dateMin.getTime() && dateProcess.getTime() <= dateMax.getTime());
+    if (dateProcess.getTime() >= dateMin.getTime() && dateProcess.getTime() <= dateMax.getTime()) {
         return false;
     } else {
         return true;
     }
 
 }
+function validateDataProcess() {
+    
+}
 
 function validateDayDriving(dateProcess, plate) {
     if (isWeekend(dateProcess)) {
-        return 'Valid, is weekend';
+        return constants.MSG_VALID_WEEKEND;
     }
 
     if (isPlateNumberNotBlock(dateProcess, plate)) {
-        return 'Driving day, valid';
+        return constants.MSG_VALID_DRIVING;
     }
 
     if (isNotInTheTimeRangeBlock(dateProcess)) {
-        return "Lockout day, but can drive in this moment";
+        return constants.MSG_VALID_LOCKOUT_NOT_BLOCK;
     }
 
-    return "Lockout, can't drive in this moment";
+    return constants.MSG_NOT_VALID_TIME_BLOCK;
 }
 
-async function process() {
-    console.log('Init process');
-
-
-    const dataProcess = await inputData.getArgValues();
-
-    const dateTimeToProcess = addTimeRange(new Date(dataProcess.day), dataProcess.time);
-    return validateDayDriving(dateTimeToProcess, dataProcess.plate);
+function processAsync() {
+    return new Promise((resolve, reject) => {
+        try {
+            inputData.getArgValues().then(response => {
+                console.info('Init process of validation', response);
+                const dataProcess = response;
+                const dateTimeToProcess = addTimeRange(new Date(dataProcess.day), dataProcess.time);
+                const resultResponse = validateDayDriving(dateTimeToProcess, dataProcess.plate);
+                console.info('Response:', resultResponse);
+                return resolve(resultResponse);
+            });
+        } catch (err) {
+            console.error('Error: process validation', err);
+            reject(err);
+        }
+    });
 }
 
 module.exports = {
-    process, isValidValue, isPlateNumberNotBlock, getDateWithTimeRange, validateDayDriving, isNotInTheTimeRangeBlock,
+    processAsync,
+    isValidValue,
+    isPlateNumberNotBlock,
+    getDateWithTimeRange,
+    validateDayDriving,
+    isNotInTheTimeRangeBlock,
     addTimeRange
 };

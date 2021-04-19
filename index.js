@@ -1,5 +1,6 @@
 const main = require('./main')
-if (env === 'prod') {
+const environment = process.env.NODE_ENV || 'dev';
+if (environment === 'prod') {
     console.log = function () {};
 }
-main.process();
+main.processAsync();
