@@ -18,23 +18,29 @@ function isValidValue(typeData, value) {
     }
 }
 
-function getDateWithTimeRange(dateProcess, timeRange) {
-    if (isValidValue('Date', dateProcess)) {
-        throw new Error('Not valid dateProcess');
+function addTimeRange(dateProcess, timeRange) {
+    if (!isValidValue(Date, dateProcess) || !isValidValue(String, timeRange)) {
+        throw new Error('Error to add time range to date', dateProcess, timeRange);
     }
-    if (isValidValue('string', timeRange)) {
-        throw new Error('Not valid timeRange');
-    }
+    dateProcess.setUTCHours(timeRange.substring(0, 2), timeRange.substring(3));
+    return dateProcess;
+}
 
-    let dateSet = new Date();
-    Object.assign(dateSet, dateProcess);
+function getDateWithTimeRange(dateProcess, timeRange) {
+    if (!isValidValue(Date, dateProcess) || !isValidValue(String, timeRange)) {
+        throw new Error('Error to add time range to date', dateProcess, timeRange);
+    }
+    const dateSet = new Date(dateProcess.getTime());
     dateSet.setUTCHours(timeRange.substring(0, 2), timeRange.substring(3));
     return dateSet;
 }
 
 function isWeekend(dateProcess) {
+    if (!isValidValue(Date, dateProcess)) {
+        throw new Error('Error to check is weekend day', dateProcess);
+    }
     const day = dateProcess.getDay();
-    if (day && day == 5 || day == 6) {
+    if (day && day == 6 || day == 0) {
         return true;
     } else {
         return false;
@@ -43,11 +49,11 @@ function isWeekend(dateProcess) {
 
 function isPlateNumberNotBlock(dateProcess, plate) {
     const controlRestriction = new Map([
-        [0, [1, 2]],
-        [1, [3, 4]],
-        [2, [5, 6]],
-        [3, [7, 8]],
-        [4, [9, 0]],
+        [1, [1, 2]],
+        [2, [3, 4]],
+        [3, [5, 6]],
+        [4, [7, 8]],
+        [5, [9, 0]],
     ]);
     if (isValidValue(Date, dateProcess) && isValidValue(String, plate)) {
         const stringLength = plate.length;
@@ -56,7 +62,7 @@ function isPlateNumberNotBlock(dateProcess, plate) {
 
         const dayControl = controlRestriction.get(day) || [];
         const existBlock = dayControl.some(item => item == lastDigit);
-        console.log('day number:',day,'lastDigit: ', lastDigit, 'dayControl:', dayControl, 'existblock:', existBlock);
+        console.log('day number:', day, 'lastDigit: ', lastDigit, 'dayControl:', dayControl, 'existblock:', existBlock);
         if (dayControl && existBlock) {
             return false;
         } else {
@@ -66,31 +72,45 @@ function isPlateNumberNotBlock(dateProcess, plate) {
     }
 }
 
-function validDate(dateProcess, timeRangeMin, timeRangeMax) {
+function isNotInTheTimeRangeBlock(dateProcess) {
     // 6:30 a.m. a 10:00 a.m. y de 5:00 p.m. a 9:00 p.m
-    if (isValidValue(Date, dateProcess)) {
-        throw new Error('Not valid dateProcess');
+    if (!isValidValue(Date, dateProcess)) {
+        throw new Error('Not valid dateProcess for validTime');
     }
 
-    if (dateProcess.getUTCHours() > 12) {
-        getDateWithTimeRange(currentDate,)
+    let dateMin = new Date();
+    let dateMax = new Date();
+    if (dateProcess.getUTCHours() >= 13) {
+        dateMin = getDateWithTimeRange(dateProcess, '17:00');
+        dateMax = getDateWithTimeRange(dateProcess, '19:00');
+    } else {
+        dateMin = getDateWithTimeRange(dateProcess, '06:30');
+        dateMax = getDateWithTimeRange(dateProcess, '10:00');
     }
-    const dateMin = dateProcess;
+
+    console.log('isNotInTheTimeRangeBlock', 'origin', dateProcess, 'dateMin', dateMin, 'dateMax', dateMax);
+    if (dateMin.getTime() >= dateProcess.getTime() || dateProcess.getTime() <= dateMax.getTime()) {
+        return false;
+    } else {
+        return true;
+    }
 
 }
 
-function validatePlate(dateProcess) {
-    if (isValidValue(Date, dateProcess)) {
-        throw new Error('Not valid dateProcess');
-    }
-
+function validateDayDriving(dateProcess, plate) {
     if (isWeekend(dateProcess)) {
         return 'Valid, is weekend';
     }
 
-    if (isPlateNumberNotBlock(dateProcess)) {
-        return 'Valid, not exist block for driving';
+    if (isPlateNumberNotBlock(dateProcess, plate)) {
+        return 'Driving day, valid';
     }
+
+    if (isNotInTheTimeRangeBlock(dateProcess)) {
+        return "Lockout day, but can drive in this moment";
+    }
+
+    return "Lockout, can't drive in this moment";
 }
 
 async function process() {
@@ -99,12 +119,11 @@ async function process() {
 
     const dataProcess = await inputData.getArgValues();
 
-    const dataDay = new Date(dataProcess.day);
-    const dataCheck = dataDay;
-    const dataValid = dataDay;
-    dataCheck.setUTCHours(dataProcess.time.substring(0, 2), dataProcess.time.substring(3));
-    console.log('Day', dataDay, dataProcess.time.substring(0, 2), dataProcess.time.substring(3));
-    return dataCheck;
+    const dateTimeToProcess = addTimeRange(new Date(dataProcess.day), dataProcess.time);
+    return validateDayDriving(dateTimeToProcess, dataProcess.plate);
 }
 
-module.exports = {process, isValidValue, isPlateNumberBlock: isPlateNumberNotBlock, getDateWithTimeRange, validatePlate};
+module.exports = {
+    process, isValidValue, isPlateNumberNotBlock, getDateWithTimeRange, validateDayDriving, isNotInTheTimeRangeBlock,
+    addTimeRange
+};

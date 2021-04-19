@@ -12,13 +12,13 @@ describe('main', () => {
       expect(data).not.toBeNull();
    });
 
-   // test('should have a date with a defined time', () => {
-   //    const currentDate = new Date();
-   //    const dateProcess = main.getDateWithTimeRange(currentDate,'13:25');
-   //    console.log('Date to process', currentDate);
-   //    console.log('Date process', dateProcess);
-   //    expect(dateProcess.getUTCHours()).toBe(13);
-   // });
+   test('should have a date with a defined time', () => {
+      const currentDate = new Date();
+      const dateProcess = main.getDateWithTimeRange(currentDate,'13:25');
+      console.log('Date to process', currentDate);
+      console.log('Date process', dateProcess);
+      expect(dateProcess.getUTCHours()).toBe(13);
+   });
 
    test('should valid if is a Date', () => {
       const currentDate = new Date();
@@ -37,12 +37,32 @@ describe('main', () => {
       expect(validValue).toBe(true);
    });
 
+   test('should show block for driving respect the time of the day', () => {
+      const dateProcess = main.getDateWithTimeRange(new Date(), '18:51');
+      const process = main.isNotInTheTimeRangeBlock(dateProcess);
+      expect(process).toBe(false);
+   });
+
    test('should valid plate in the day', () => {
-      const process = main.isPlateNumberBlock(new Date('2021-04-15'), 'GYU-1234');
+      const process = main.isPlateNumberNotBlock(new Date('2021-04-15'), 'GYU-1234');
       expect(process).toBe(true);
    });
-   test('should not valid plate in the day', () => {
-      const process = main.isPlateNumberBlock(new Date('2021-04-16'), 'GYU-1230');
-      expect(process).toBe(false);
+
+   test('should valid plate and day for driving is weekend', () => {
+      const process = main.validateDayDriving(new Date('2021-04-18'), 'GYU-1230');
+      expect(process).toBe("Valid, is weekend");
+   });
+
+   test('should valid plate and day for driving not block', () => {
+      const process = main.validateDayDriving(new Date('2021-04-15'), 'GYU-1234');
+      expect(process).toBe('Driving day, valid');
+   });
+
+   test('should block by the plate and daytime', () => {
+      const dateBase = new Date('2021-04-16');
+      const dateToProcess = main.addTimeRange( dateBase, '18:51');
+      console.log('DateToProcess', dateBase, dateToProcess, dateToProcess.getUTCHours(), dateToProcess.getDay());
+      const process = main.validateDayDriving(dateToProcess, 'GYU-1239');
+      expect(process).toBe("Lockout, can't drive in this moment");
    });
 });
