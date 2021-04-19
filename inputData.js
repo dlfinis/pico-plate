@@ -17,9 +17,10 @@ function getArgValues() {
             plate: {
                 description: 'Input a plate (AAA-####)',
                 default: 'GYU-1234',
-                pattern: /^[A-Z]{3}-[1-9]{3,4}|^[A-Z]{3}-[1-9]{1}[0-9]{2,3}|^[A-Z]{2}-[1-9]{1}[0-9]{2,3}$/,
+                pattern: /^[a-zA-Z]{3}-[1-9]{3,4}|^[a-zA-Z]{3}-[1-9]{1}[0-9]{2,3}|^[a-zA-Z]{2}-[0-9]{3,4}$/,
                 message: '2 or 3 letters one dash 3 or 4 digits',
-                required: true
+                required: true,
+                before: function(value) { return value.toUpperCase(); }
             },
             day: {
                 description: 'Input a day (yyy-mm-dd)',

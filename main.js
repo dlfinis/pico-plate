@@ -8,7 +8,6 @@ const inputData = require('./inputData');
 const constants = require('./constants');
 
 function isValidValue(typeData, value) {
-    // console.log('isValidValue', typeData, value);
     if (typeof typeData !== 'function') {
         throw new Error('Not valid class of data type', typeData);
     }
@@ -36,29 +35,31 @@ function getDateWithTimeRange(dateProcess, timeRange) {
     return dateSet;
 }
 
-function isWeekend(dateProcess) {
-    if (!isValidValue(Date, dateProcess)) {
-        throw new Error('Error to check is weekend day', dateProcess);
+function getPlateException(plate) {
+    const contentLetters = plate.substring(0, plate.indexOf('-'));
+    const letters = contentLetters.split('');
+
+    if (constants.CONFIG.DIPLOMATIC_PLATE.includes(contentLetters)) {
+        return constants.MSG_VALID_NOT_LOCK.replace('{0}', 'it is a diplomatic');
     }
-    const day = dateProcess.getUTCDay();
-    if (day && day == 6 || day == 0) {
-        return true;
-    } else {
-        return false;
+    if (constants.CONFIG.ORGANIZATION_PLATE.includes(contentLetters)) {
+        return constants.MSG_VALID_NOT_LOCK.replace('{0}', 'it is an organization international');
     }
+    if (constants.CONFIG.STATE_TRANSPORTATION.includes(letters[1])) {
+        return constants.MSG_VALID_NOT_LOCK.replace('{0}', 'it is a state');
+    }
+    if (constants.CONFIG.PUBLIC_TRANSPORTATION.includes(letters[1])) {
+        return constants.MSG_VALID_NOT_LOCK.replace('{0}', 'it is a public transportation');
+    }
+
+    return constants.CONFIG.PRIVATE_PLATE;
 }
 
-function isPlateException(plate) {
-    if (isValidValue(String, plate)) {
-        const letters = plate.substring(0, plate.indexOf('-')+1).split();
-        if (letters.length == 1) {
-            return 'Not lock, diplomatic.'
-        }
-        if (['A', 'U', 'Z'].includes(letters[1])){
-            return 'Not lock, public transportation.'
-        }
-    }
+function isWeekend(dateProcess) {
+    const day = dateProcess.getUTCDay();
+    return day === 6 || day === 0;
 }
+
 function isPlateNumberNotBlock(dateProcess, plate) {
     const controlRestriction = new Map([
         [1, [1, 2]],
@@ -67,31 +68,20 @@ function isPlateNumberNotBlock(dateProcess, plate) {
         [4, [7, 8]],
         [5, [9, 0]],
     ]);
-    if (isValidValue(Date, dateProcess) && isValidValue(String, plate)) {
-        const stringLength = plate.length;
-        const lastDigit = Number.parseInt(plate.charAt(stringLength - 1));
-        const day = dateProcess.getUTCDay() || dateProcess.getDay();
+    const stringLength = plate.length;
+    const lastDigit = Number.parseInt(plate.charAt(stringLength - 1));
+    const day = dateProcess.getUTCDay() || dateProcess.getDay();
 
-        const dayControl = controlRestriction.get(day) || [];
-        const existBlock = dayControl.some(item => item == lastDigit);
-        console.log('day number:', day, 'lastDigit: ', lastDigit, 'dayControl:', dayControl, 'existblock:', existBlock);
-        if (dayControl && existBlock) {
-            return false;
-        } else {
-            return true;
-        }
-
-    }
+    const dayControl = controlRestriction.get(day) || [];
+    const existBlock = dayControl.some(item => item === lastDigit);
+    console.log('day number:', day, 'lastDigit: ', lastDigit, 'dayControl:', dayControl, 'existblock:', existBlock);
+    return !(dayControl && existBlock);
 }
 
+//  7:00am - 9:30am / 16:00pm - 19:30
 function isNotInTheTimeRangeBlock(dateProcess) {
-    // 6:30 a.m. a 10:00 a.m. y de 5:00 p.m. a 9:00 p.m
-    if (!isValidValue(Date, dateProcess)) {
-        throw new Error('Not valid dateProcess for validTime');
-    }
-
-    let dateMin = new Date();
-    let dateMax = new Date();
+    let dateMin;
+    let dateMax;
     if (dateProcess.getUTCHours() >= 13) {
         dateMin = getDateWithTimeRange(dateProcess, constants.CONFIG.AFTERNOON_MIN);
         dateMax = getDateWithTimeRange(dateProcess, constants.CONFIG.AFTERNOON_MAX);
@@ -100,22 +90,33 @@ function isNotInTheTimeRangeBlock(dateProcess) {
         dateMax = getDateWithTimeRange(dateProcess, constants.CONFIG.MORNING_MAX);
     }
 
-    console.log('isNotInTheTimeRangeBlock', 'origin', dateProcess, 'dateMin', dateMin, 'dateMax', dateMax,
-        'result:', dateProcess.getTime() >= dateMin.getTime() && dateProcess.getTime() <= dateMax.getTime());
-    if (dateProcess.getTime() >= dateMin.getTime() && dateProcess.getTime() <= dateMax.getTime()) {
-        return false;
-    } else {
-        return true;
-    }
-
+    console.log('isNotInTheTimeRangeBlock', 'origin', dateProcess, 'dateMin', dateMin, 'dateMax', dateMax);
+    return !(dateProcess.getTime() >= dateMin.getTime() && dateProcess.getTime() <= dateMax.getTime());
 }
-function validateDataProcess() {
-    
+
+function isOutTimeRangeBlock(dateProcess) {
+    const dateMin = getDateWithTimeRange(dateProcess, constants.CONFIG.MORNING_MIN);
+    const dateMax = getDateWithTimeRange(dateProcess, constants.CONFIG.AFTERNOON_MAX);
+    return dateProcess.getTime() < dateMin.getTime() || dateProcess.getTime() > dateMax.getTime();
+}
+
+function validateDataProcess(dateProcess, plate, timeRange) {
+    return isValidValue(Date, dateProcess) && isValidValue(String, plate) && isValidValue(String, timeRange);
 }
 
 function validateDayDriving(dateProcess, plate) {
+
     if (isWeekend(dateProcess)) {
         return constants.MSG_VALID_WEEKEND;
+    }
+
+    if (isOutTimeRangeBlock(dateProcess)) {
+        return constants.MSG_NOT_LOCKOUT_TIME;
+    }
+
+    const plateException = getPlateException(plate);
+    if (plateException !== constants.CONFIG.PRIVATE_PLATE) {
+        return plateException;
     }
 
     if (isPlateNumberNotBlock(dateProcess, plate)) {
@@ -132,11 +133,15 @@ function validateDayDriving(dateProcess, plate) {
 function processAsync() {
     return new Promise((resolve, reject) => {
         try {
+            let resultResponse = 'Not process validation';
             inputData.getArgValues().then(response => {
                 console.info('Init process of validation', response);
                 const dataProcess = response;
-                const dateTimeToProcess = addTimeRange(new Date(dataProcess.day), dataProcess.time);
-                const resultResponse = validateDayDriving(dateTimeToProcess, dataProcess.plate);
+                const dateValue = new Date(dataProcess.day);
+                if (validateDataProcess(dateValue, dataProcess.plate, dataProcess.time)) {
+                    const dateTimeToProcess = addTimeRange(dateValue, dataProcess.time);
+                    resultResponse = validateDayDriving(dateTimeToProcess, dataProcess.plate);
+                }
                 console.info('Response:', resultResponse);
                 return resolve(resultResponse);
             });
@@ -149,10 +154,11 @@ function processAsync() {
 
 module.exports = {
     processAsync,
+    addTimeRange,
+    getDateWithTimeRange,
+    getPlateException,
     isValidValue,
     isPlateNumberNotBlock,
-    getDateWithTimeRange,
-    validateDayDriving,
     isNotInTheTimeRangeBlock,
-    addTimeRange
+    validateDayDriving,
 };

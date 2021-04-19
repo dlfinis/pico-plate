@@ -50,18 +50,24 @@ describe('main', () => {
         expect(process).toBe(false);
     });
 
+    test('should valid plate private', () => {
+        const process = main.getPlateException('GYU-1234');
+        expect(process).toBe(constants.CONFIG.PRIVATE_PLATE);
+    });
+
+    test('should get exception of international plate', () => {
+        const processMessage = main.getPlateException('IT-1234');
+        console.log('Type plate', processMessage);
+        expect(processMessage).not.toBeNull();
+    });
+
     test('should valid plate in the day', () => {
         const process = main.isPlateNumberNotBlock(new Date('2021-04-15'), 'GYU-1234');
         expect(process).toBe(true);
     });
 
-    test('should valid plate and day for driving is weekend', () => {
-        const process = main.validateDayDriving(new Date('2021-04-18'), 'GYU-1230');
-        expect(process).toBe(constants.MSG_VALID_WEEKEND);
-    });
-
     test('should valid plate and day for driving not block', () => {
-        const process = main.validateDayDriving(new Date('2021-04-15'), 'GYU-1234');
+        const process = main.validateDayDriving(main.addTimeRange(new Date('2021-04-15'), '18:51'), 'GYU-1234');
         expect(process).toBe(constants.MSG_VALID_DRIVING);
     });
 
@@ -71,6 +77,17 @@ describe('main', () => {
         console.log('DateToProcess', dateBase, dateToProcess, dateToProcess.getUTCHours(), dateToProcess.getDay());
         const process = main.validateDayDriving(dateToProcess, 'GYU-1239');
         expect(process).toBe(constants.MSG_NOT_VALID_TIME_BLOCK);
+    });
+
+    test('should not block by plate type public', () => {
+        inputData.getArgValues = jest.fn().mockReturnValue(new Promise(resolve => resolve({
+            plate: 'TAE-1234',
+            day: '2021-04-21',
+            time: '12:30'
+        })));
+        return main.processAsync().then(response => {
+            expect(response).toBe(constants.MSG_VALID_NOT_LOCK.replace('{0}', 'it is a public transportation'));
+        });
     });
 
     test('should not block by day is weekend', () => {
